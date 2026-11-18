@@ -1,0 +1,240 @@
+drop table if exists projects cascade;
+drop table if exists employees cascade;
+drop table if exists departments cascade;
+
+create table departments (
+    dept_id int primary key,
+    dept_name varchar(50),
+    location varchar(50)
+);
+
+create table employees (
+    emp_id int primary key,
+    emp_name varchar(100),
+    dept_id int,
+    salary decimal(10,2),
+    foreign key (dept_id) references departments(dept_id)
+);
+
+create table projects (
+    proj_id int primary key,
+    proj_name varchar(100),
+    budget decimal(12,2),
+    dept_id int,
+    foreign key (dept_id) references departments(dept_id)
+);
+
+insert into departments values
+(101, 'it', 'building a'),
+(102, 'hr', 'building b'),
+(103, 'operations', 'building c');
+
+insert into employees values
+(1, 'john smith', 101, 50000),
+(2, 'jane doe', 101, 55000),
+(3, 'mike johnson', 102, 48000),
+(4, 'sarah williams', 102, 52000),
+(5, 'tom brown', 103, 60000);
+
+insert into projects values
+(201, 'website redesign', 75000, 101),
+(202, 'database migration', 120000, 101),
+(203, 'hr system upgrade', 50000, 102);
+
+
+
+-- 2.1
+create index emp_salary_idx on employees(salary);
+
+select indexname, indexdef
+from pg_indexes
+where tablename = 'employees';
+
+
+
+--2.2
+create index emp_dept_idx on employees(dept_id);
+
+select * from employees where dept_id = 101;
+
+
+
+-- 2.3
+select
+    tablename,
+    indexname,
+    indexdef
+from pg_indexes
+where schemaname = 'public'
+order by tablename, indexname;
+
+
+
+
+--3.1
+create index emp_dept_salary_idx on employees (dept_id, salary);
+
+select emp_name, salary
+from employees
+where dept_id = 101
+  and salary > 52000;
+
+
+--3.2
+create index emp_salary_dept_idx on employees(salary, dept_id);
+
+select * from employees where dept_id = 102 and salary > 50000;
+
+select * from employees where salary > 50000 and dept_id = 102;
+
+
+
+
+
+--  4.1
+alter table employees add column email varchar(100);
+update employees set email = 'john.smith@company.com' where emp_id = 1;
+update employees set email = 'jane.doe@company.com' where emp_id = 2;
+update employees set email = 'mike.johnson@company.com' where emp_id = 3;
+update employees set email = 'sarah.williams@company.com' where emp_id = 4;
+update employees set email = 'tom.brown@company.com' where emp_id = 5;
+
+create unique index emp_email_unique_idx on employees(email);
+
+
+
+-- 4.2
+alter table employees add column phone varchar(20) unique;
+
+select indexname, indexdef
+from pg_indexes
+where tablename = 'employees' and indexname like '%phone%';
+
+
+
+
+-- 5.1
+create index emp_salary_desc_idx on employees(salary desc);
+
+select emp_name, salary
+from employees
+order by salary desc;
+
+
+
+--5.2
+create index proj_budget_nulls_first_idx on projects(budget nulls first);
+
+select proj_name, budget
+from projects
+order by budget nulls first;
+
+
+
+--  6.1
+create index emp_name_lower_idx on employees (lower(emp_name));
+
+select * from employees where lower(emp_name) = 'john smith';
+
+
+
+--  6.2
+alter table employees add column hire_date date;
+update employees set hire_date = '2020-01-15' where emp_id = 1;
+update employees set hire_date = '2019-06-20' where emp_id = 2;
+update employees set hire_date = '2021-03-10' where emp_id = 3;
+update employees set hire_date = '2020-11-05' where emp_id = 4;
+update employees set hire_date = '2018-08-25' where emp_id = 5;
+
+create index emp_hire_year_idx on employees(extract(year from hire_date));
+
+select emp_name, hire_date
+from employees
+where extract(year from hire_date) = 2020;
+
+
+
+-- 7.1
+alter index emp_salary_idx rename to employees_salary_index;
+
+select indexname from pg_indexes where tablename = 'employees';
+
+-- 7.2
+drop index emp_salary_dept_idx;
+
+
+
+-- 7.3
+reindex index employees_salary_index;
+
+
+
+-- 8.1
+select e.emp_name, e.salary, d.dept_name
+from employees e
+join departments d on e.dept_id = d.dept_id
+where e.salary > 50000
+order by e.salary desc;
+
+create index emp_salary_filter_idx on employees(salary) where salary > 50000;
+
+
+--  8.2
+create index proj_high_budget_idx on projects(budget)
+where budget > 80000;
+
+select proj_name, budget
+from projects
+where budget > 80000;
+
+
+-- 8.3
+explain select * from employees where salary > 52000;
+
+
+
+-- 9.1
+create index dept_name_hash_idx on departments using hash (dept_name);
+
+select * from departments where dept_name = 'it';
+
+
+-- 9.2
+create index proj_name_btree_idx on projects(proj_name);
+create index proj_name_hash_idx on projects using hash (proj_name);
+
+select * from projects where proj_name = 'website redesign';
+
+select * from projects where proj_name > 'database';
+
+
+
+--  10.1
+select
+    schemaname,
+    tablename,
+    indexname,
+    pg_size_pretty(pg_relation_size(indexname::regclass)) as index_size
+from pg_indexes
+where schemaname = 'public'
+order by tablename, indexname;
+
+
+
+--  10.2
+drop index if exists proj_name_hash_idx;
+
+--10.3
+create or replace view index_documentation as
+select
+    tablename,
+    indexname,
+    indexdef,
+    'improves salary-based queries' as purpose
+from pg_indexes
+where schemaname = 'public'
+  and indexname like '%salary%';
+
+select * from index_documentation;
+
+
